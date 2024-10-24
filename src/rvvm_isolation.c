@@ -60,15 +60,14 @@ along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #define ISOLATION_PLEDGE_IMPL
 #endif
 
-#if defined(__APPLE__) && defined(USE_EXPERIMENTAL_SHIT) && CHECK_INCLUDE(sandbox.h, 0) && CHECK_INCLUDE(objc/objc-api.h, 0)
-// && CHECK_INCLUDE(Foundation/Foundation.h, 0) && CHECK_INCLUDE(Cocoa/Cocoa.h, 0)
+#if defined(__APPLE__) && (USE_EXPERIMENTAL_SHIT) && CHECK_INCLUDE(objc/objc-api.h, 0)
 // Isolate via MacOS sandbox_init_with_parameters() call, without lisp sandbox.
 #include <sys/stat.h>
-#include <sandbox.h>
 #include <objc/runtime.h>
 #include <objc/message.h>
 #include <objc/objc-api.h>
 #include <objc/NSObject.h>
+#include <xpc/xpc.h>
 #define ISOLATION_GATEKEEPER_IMPL
 #endif
 
@@ -556,20 +555,36 @@ static void seccomp_setup_syscall_filter(bool all_threads) {
 #if defined(ISOLATION_GATEKEEPER_IMPL)
 
 id NSHomeDirectory (void);
+id NSString (char *path); // = @"/path/to/your/file.txt";
+id NSApplicationMain (void);
 int sandbox_init_with_parameters(const char *profile, uint64_t flags, const char *const parameters[], char **errorbuf);
+
+// id NSFileManager = objc_getClass("NSFileManager");
+// id sharedManager = objc_msgSend(NSFileManager, sel_getUid("defaultManager"));
+
+// id paths = objc_msgSend(NSFileManager, sel_getUid("URLsForDirectory:inDomains:"), 9, 1);
+// // NSDocumentDirectory = 9
+// id documentsDirectory = objc_msgSend(paths, sel_getUid("lastObject"));
+// // Create the file path
+// id filePath = objc_msgSend(documentsDirectory, sel_getUid("URLByAppendingPathComponent:"), objc_msgSend(objc_getClass("NSString"), sel_getUid("stringWithUTF8String:"), "your_file.txt"));
+// // Read the file
+// id fileContents = objc_msgSend(objc_getClass("NSString"), sel_getUid("stringWithContentsOfURL:encoding:error:"), filePath, 4, NULL); // NSUTF8StringEncoding = 4
+
 
 static void engage_gatekeeper_sandboxing(void) {
     char* errorbuf = "";
     // For more info see: https://opensource.apple.com/source/objc4/objc4-551.1/runtime/message.h.auto.html
     // Parameters are passed as an array containing key,value,buff.
     // TODO: proper profile for rvvm and rvjit
-    const char profile[] = "(version 1)" "(deny default)" "(allow file-read* (subpath (param \"USER_HOME_DIR\")))";
-    const char* restrict_dir = ((const char* (*)(id,SEL)) &objc_msgSend)(NSHomeDirectory(), sel_registerName("UTF8String"));
+    const char profile[] = "(version 3)(allow default) (allow file-ioctl)(allow file-read-metadata)"\
+    "(allow file-read-data (regex \"^/System\" \"^/Library\" \"^/private\" \"^/dev\" \"^/usr\" \"~/Library\"))"\
+    "(allow file-map-executable (subpath (param \"/System/Library\")) (subpath (param \"/usr/lib\" \"/opt/homebrew/Cellar\")))";
+    const char* restrict_dir = ((const char* (*)(id,SEL)) &objc_msgSend)(NSApplicationMain(), sel_registerName("UTF8String"));
     const char* parameters[] = { "USER_HOME_DIR", restrict_dir, NULL };
     rvvm_debug("Attempting to sandbox...\nProfile is: %s restrict_dir is: %s", profile, restrict_dir);
+    
     if (sandbox_init_with_parameters(profile, 0, parameters, &errorbuf)) {
         DO_ONCE(rvvm_warn("Failed to enforce gatekeeper sandbox: %s!", errorbuf));
-        sandbox_free_error(errorbuf);
     } else {
         DO_ONCE(rvvm_info("Sandbox engaged successfully"));
     };
@@ -589,6 +604,7 @@ void rvvm_restrict_this_thread(void)
 
 PUBLIC void rvvm_restrict_process(void)
 {
+    rvvm_debug("We hit sandboxing stage...");
     drop_root_user();
     drop_thread_caps();
 #if defined(SANITIZERS_PRESENT)

@@ -560,8 +560,8 @@ endif
 
 # Sign binaries on MacOS host
 ifneq (,$(if $(findstring darwin,$(OS)),$(shell which codesign $(NULL_STDERR))))
-ENTITLEMENTS := $(SRCDIR)/bindings/macos_codesign/rvvm_debug.entitlements
-override CODESIGN = codesign -f -s - --force --options=runtime --timestamp --verbose --entitlements $(ENTITLEMENTS) $@ && codesign -d -vvv --entitlements - $@ && plutil $(ENTITLEMENTS)
+ENTITLEMENTS = $(SRCDIR)/bindings/macos_codesign/rvvm.entitlements
+override CODESIGN = plutil $(ENTITLEMENTS) && codesign -s - -o library,runtime --timestamp --verbose=4 --verify --strict --entitlements $(ENTITLEMENTS) $@ && spctl --assess --verbose=4 --type execute $@
 endif
 
 #
@@ -592,13 +592,13 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.cpp Makefile
 $(BINARY): $(OBJS)
 	$(info $(WHITE)[$(GREEN)LD$(WHITE)] $@ $(RESET))
 	@$(CC_LD) $(CFLAGS) $(OBJS) $(LDFLAGS) -o $@
-	@$(CODESIGN)
+#	@$(CODESIGN)
 
 # Shared library
 $(SHARED): $(LIB_OBJS)
 	$(info $(WHITE)[$(GREEN)LD$(WHITE)] $@ $(RESET))
 	@$(CC_LD) $(CFLAGS) $(LIB_OBJS) $(LDFLAGS) -shared -o $@
-	@$(CODESIGN)
+#	@$(CODESIGN)
 
 # Static library
 $(STATIC): $(LIB_OBJS)
