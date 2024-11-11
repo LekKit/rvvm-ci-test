@@ -1,6 +1,6 @@
 /*
 rvvm_isolation.c - Process & thread isolation
-Copyright (C) 2024  LekKit <github.com/LekKit>
+Copyright (C) 2024  LekKit <github.com/LekKit> foxxie <github.com/n30f0x>
 
 This Source Code Form is subject to the terms of the Mozilla Public
 License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -49,6 +49,17 @@ file, You can obtain one at https://mozilla.org/MPL/2.0/.
 #if defined(__OpenBSD__)
 #include <unistd.h>
 #define ISOLATION_PLEDGE_IMPL
+#endif
+
+#if defined(__APPLE__) && (USE_EXPERIMENTAL_SHIT) && CHECK_INCLUDE(objc/objc-api.h, 0)
+// Isolate via MacOS sandbox_init_with_parameters() call, without lisp sandbox.
+#include <sys/stat.h>
+#include <objc/runtime.h>
+#include <objc/message.h>
+#include <objc/objc-api.h>
+#include <objc/NSObject.h>
+#include <xpc/xpc.h>
+#define ISOLATION_GATEKEEPER_IMPL
 #endif
 
 #endif
@@ -532,6 +543,46 @@ static void seccomp_setup_syscall_filter(bool all_threads) {
 
 #endif
 
+#if defined(ISOLATION_GATEKEEPER_IMPL)
+
+id NSHomeDirectory (void);
+id NSString (char *path); // = @"/path/to/your/file.txt";
+id NSApplicationMain (void);
+int sandbox_init_with_parameters(const char *profile, uint64_t flags, const char *const parameters[], char **errorbuf);
+
+// id NSFileManager = objc_getClass("NSFileManager");
+// id sharedManager = objc_msgSend(NSFileManager, sel_getUid("defaultManager"));
+
+// id paths = objc_msgSend(NSFileManager, sel_getUid("URLsForDirectory:inDomains:"), 9, 1);
+// // NSDocumentDirectory = 9
+// id documentsDirectory = objc_msgSend(paths, sel_getUid("lastObject"));
+// // Create the file path
+// id filePath = objc_msgSend(documentsDirectory, sel_getUid("URLByAppendingPathComponent:"), objc_msgSend(objc_getClass("NSString"), sel_getUid("stringWithUTF8String:"), "your_file.txt"));
+// // Read the file
+// id fileContents = objc_msgSend(objc_getClass("NSString"), sel_getUid("stringWithContentsOfURL:encoding:error:"), filePath, 4, NULL); // NSUTF8StringEncoding = 4
+
+
+static void engage_gatekeeper_sandboxing(void) {
+    char* errorbuf = "";
+    // For more info see: https://opensource.apple.com/source/objc4/objc4-551.1/runtime/message.h.auto.html
+    // Parameters are passed as an array containing key,value,buff.
+    // TODO: proper profile for rvvm and rvjit
+    const char profile[] = "(version 3)(allow default) (allow file-ioctl)(allow file-read-metadata)"\
+    "(allow file-read-data (regex \"^/System\" \"^/Library\" \"^/private\" \"^/dev\" \"^/usr\" \"~/Library\"))"\
+    "(allow file-map-executable (subpath (param \"/System/Library\")) (subpath (param \"/usr/lib\" \"/opt/homebrew/Cellar\")))";
+    const char* restrict_dir = ((const char* (*)(id,SEL)) &objc_msgSend)(NSApplicationMain(), sel_registerName("UTF8String"));
+    const char* parameters[] = { "USER_HOME_DIR", restrict_dir, NULL };
+    rvvm_debug("Attempting to sandbox...\nProfile is: %s restrict_dir is: %s", profile, restrict_dir);
+    
+    if (sandbox_init_with_parameters(profile, 0, parameters, &errorbuf)) {
+        DO_ONCE(rvvm_warn("Failed to enforce gatekeeper sandbox: %s!", errorbuf));
+    } else {
+        DO_ONCE(rvvm_info("Sandbox engaged successfully"));
+    };
+};
+
+#endif                                 
+
 void rvvm_restrict_this_thread(void)
 {
     drop_root_user();
@@ -544,6 +595,7 @@ void rvvm_restrict_this_thread(void)
 
 PUBLIC void rvvm_restrict_process(void)
 {
+    rvvm_debug("We hit sandboxing stage...");
     drop_root_user();
     drop_thread_caps();
 #if defined(SANITIZERS_PRESENT)
@@ -554,5 +606,7 @@ PUBLIC void rvvm_restrict_process(void)
     if (pledge("stdio inet tty ioctl dns audio drm vmm error", "")) {
         DO_ONCE(rvvm_warn("Failed to enforce pledge: %s!", strerror(errno)));
     }
+#elif defined(ISOLATION_GATEKEEPER_IMPL)
+    engage_gatekeeper_sandboxing();
 #endif
 }

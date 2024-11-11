@@ -212,8 +212,23 @@ ifneq (,$(findstring linux,$(OS))$(findstring bsd,$(OS))$(findstring sunos,$(OS)
 USE_X11 ?= 1
 endif
 
-ifneq (,$(findstring darwin,$(OS))$(findstring serenity,$(OS)))
-# Enable SDL2 on Darwin, Serenity by default
+ifneq (,$(findstring darwin,$(OS)))
+# Enable SDL2 on Darwin by default
+USE_SDL ?= 2
+ifeq ($(USE_ISOLATION),1)
+# Foundation/Cocoa runtime
+override LDFLAGS += -lobjc -framework Cocoa
+endif
+ifneq (,1 $(filter$(LTO_SUPPORTED,$(filter 1,$(USE_DEBUG)$(USE_DEBUG_FULL)))))
+# Generate symbols with lto on debug on darwin>=15.x
+override LDFLAGS += -Wl,-object_path_lto,$(BUILDDIR)/obj/lto
+# Generate dSYM symbol bundle explicitly on debug on darwin>=15.x
+override CFLAGS += -dsym-dir $(BUILDDIR)/$(BINARY).dSYM
+endif
+endif
+
+ifneq (,$(findstring serenity,$(OS)))
+# Enable SDL2 on Serenity by default
 USE_SDL ?= 2
 endif
 
@@ -562,8 +577,11 @@ endif
 
 # Sign binaries on MacOS host
 ifneq (,$(if $(findstring darwin,$(OS)),$(shell which codesign $(NULL_STDERR))))
-override ENTITLEMENTS := $(SRCDIR)/bindings/macos_codesign/rvvm_debug.entitlements
-override CODESIGN = codesign -s - --force --options=runtime --entitlements $(ENTITLEMENTS) $@
+ENTITLEMENTS = $(SRCDIR)/bindings/macos_codesign/rvvm.entitlements
+override ENT = $(info $(WHITE)[$(GREEN)ENT$(WHITE)] $(shell plutil $(ENTITLEMENTS))$(RESET))
+# override CODESIGN = $(info $(WHITE)[$(GREEN)CODESIGN$(WHITE)] $(shell codesign -s - -o runtime,library --timestamp --preserve-metadata=entitlements,requirements,flags,runtime --entitlements $(ENTITLEMENTS) $@)$(RESET))
+override CODESIGN = codesign -s - -o runtime,library --timestamp --preserve-metadata=entitlements,requirements,flags,runtime --entitlements $(ENTITLEMENTS) $@
+override VERIFY = $(info $(WHITE)[$(GREEN)VERIFY$(WHITE)] $(shell spctl --assess --verbose=4 --type execute $@) $(RESET))
 endif
 
 #
@@ -594,13 +612,17 @@ $(OBJDIR)/%.o: $(SRCDIR)/%.cpp Makefile
 $(BINARY): $(OBJS)
 	$(info $(WHITE)[$(GREEN)LD$(WHITE)] $@ $(RESET))
 	@$(CC_LD) $(CFLAGS) $(OBJS) $(LDFLAGS) -o $@
+	@$(ENT)
 	@$(CODESIGN)
+	@$(VERIFY)
 
 # Shared library
 $(SHARED): $(LIB_OBJS)
 	$(info $(WHITE)[$(GREEN)LD$(WHITE)] $@ $(RESET))
 	@$(CC_LD) $(CFLAGS) $(LIB_OBJS) $(LDFLAGS) -shared -o $@
+	@$(ENT)
 	@$(CODESIGN)
+	@$(VERIFY)
 
 # Static library
 $(STATIC): $(LIB_OBJS)
