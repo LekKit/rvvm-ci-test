@@ -63,7 +63,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4.1.1
       - name: Download SDL2 headers
-        run: wget ${{env.SDL2_TAR_LINK}} && tar -xzf ${{env.SDL2_NAME}} && mv ${{env.SDL2_NAME}}/include src/SDL2
+        run: wget ${{env.SDL2_TAR_LINK}} -O - | tar -xzf - && mv ${{env.SDL2_NAME}}/include src/SDL2
       - name: Build
         run: arch -arm64 make lib all
       - name: Upload Artifacts
@@ -86,7 +86,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4.1.1
       - name: Download SDL2 headers
-        run: wget ${{env.SDL2_TAR_LINK}} && tar -xzf ${{env.SDL2_NAME}} && mv ${{env.SDL2_NAME}}/include src/SDL2
+        run: wget ${{env.SDL2_TAR_LINK}} -O - | tar -xzf - && mv ${{env.SDL2_NAME}}/include src/SDL2
       - name: Build
         run: arch -x86_64 make lib all
       - name: Upload Artifacts
