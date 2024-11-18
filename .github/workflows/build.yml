@@ -58,7 +58,7 @@ jobs:
     env:
       SDL2_TAR_LINK: https://github.com/libsdl-org/SDL/releases/download/release-2.30.9/SDL2-2.30.9.tar.gz
       SDL2_NAME: SDL2-2.30.9
-      CFLAGS: -Werror -ISDL2-2.30.9/include
+      CFLAGS: -target arm64-apple-macos11 -Werror -ISDL2-2.30.9/include
     steps:
       - name: Checkout
         uses: actions/checkout@v4.1.1
@@ -81,14 +81,14 @@ jobs:
     env:
       SDL2_TAR_LINK: https://github.com/libsdl-org/SDL/releases/download/release-2.30.9/SDL2-2.30.9.tar.gz
       SDL2_NAME: SDL2-2.30.9
-      CFLAGS: -Werror -ISDL2-2.30.9/include
+      CFLAGS: -target x86_64-apple-macos10.12 -Werror -ISDL2-2.30.9/include
     steps:
       - name: Checkout
         uses: actions/checkout@v4.1.1
       - name: Download SDL2 headers
         run: wget ${{env.SDL2_TAR_LINK}} -O - | tar -xzf - && mv ${{env.SDL2_NAME}}/include src/SDL2
       - name: Build
-        run: arch -x86_64 make lib all
+        run: make lib all
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4.3.1
         with:
