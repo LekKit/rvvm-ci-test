@@ -11,7 +11,7 @@ on:
 
 env:
   SDL2_VERSION: 2.30.9
-  SDL2_TAR_LINK: https://github.com/libsdl-org/SDL/releases/download/release-$SDL2_VERSION/SDL2-$SDL2_VERSION.tar.gz
+  SDL2_TAR_LINK: https://github.com/libsdl-org/SDL/releases/download/release-${{ env.SDL2_VERSION }}/SDL2-${{ env.SDL2_VERSION }}.tar.gz
   CFLAGS: -Werror
 
 jobs:
@@ -58,12 +58,12 @@ jobs:
   macos-arm64-build:
     runs-on: macos-latest
     env:
-      CFLAGS: $CFLAGS -ISDL2-$SDL2_VERSION/include
+      CFLAGS: ${{ env.CFLAGS }} -ISDL2-${{ env.SDL2_VERSION }}/include
     steps:
       - name: Checkout
         uses: actions/checkout@v4.1.1
       - name: Download SDL2 headers
-        run: wget $SDL2_TAR_LINK -O - | tar -xzvf -
+        run: wget ${{ env.SDL2_TAR_LINK }} -O - | tar -xzvf -
       - name: Build
         run: arch -arm64 make lib all
       - name: Upload Artifacts
@@ -79,12 +79,12 @@ jobs:
   macos-x86_64-build:
     runs-on: macos-latest
     env:
-      CFLAGS: $CFLAGS -ISDL2-$SDL2_VERSION/include
+      CFLAGS: ${{ env.CFLAGS }} -ISDL2-${{ env.SDL2_VERSION }}/include
     steps:
       - name: Checkout
         uses: actions/checkout@v4.1.1
       - name: Download SDL2 headers
-        run: wget $SDL2_TAR_LINK -O - | tar -xzvf -
+        run: wget ${{ env.SDL2_TAR_LINK }} -O - | tar -xzvf -
       - name: Build
         run: arch -x86_64 make lib all
       - name: Upload Artifacts
