@@ -60,21 +60,21 @@ jobs:
       SDL2_NAME: SDL2-2.30.9
       CFLAGS: -target arm64-apple-macos11 -Werror -ISDL2-2.30.9/include
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4.1.1
-      - name: Download SDL2 headers
-        run: wget ${{env.SDL2_TAR_LINK}} -O - | tar -xzf - && mv ${{env.SDL2_NAME}}/include src/SDL2
-      - name: Build
-        run: arch -arm64 make lib all
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4.3.1
-        with:
-          retention-days: 5
-          name: rvvm_macos_arm64
-          path: |
-            release.darwin.arm64/rvvm_arm64
-            release.darwin.arm64/librvvm.dylib
-            release.darwin.arm64/librvvm_static.a
+    - name: Checkout
+      uses: actions/checkout@v4.1.1
+    - name: Download SDL2 headers
+      run: wget ${{env.SDL2_TAR_LINK}} -O - | tar -xzf - && mv ${{env.SDL2_NAME}}/include src/SDL2
+    - name: Build
+      run: make lib all
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4.3.1
+      with:
+        retention-days: 5
+        name: rvvm_macos_arm64
+        path: |
+          release.darwin.arm64/rvvm_arm64
+          release.darwin.arm64/librvvm.dylib
+          release.darwin.arm64/librvvm_static.a
 
   macos-x86_64-build:
     runs-on: macos-latest
@@ -83,18 +83,18 @@ jobs:
       SDL2_NAME: SDL2-2.30.9
       CFLAGS: -target x86_64-apple-macos10.12 -Werror -ISDL2-2.30.9/include
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4.1.1
-      - name: Download SDL2 headers
-        run: wget ${{env.SDL2_TAR_LINK}} -O - | tar -xzf - && mv ${{env.SDL2_NAME}}/include src/SDL2
-      - name: Build
-        run: make lib all
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v4.3.1
-        with:
-          retention-days: 5
-          name: rvvm_macos_x86_64
-          path: |
-            release.darwin.x86_64/rvvm_x86_64
-            release.darwin.x86_64/librvvm.dylib
-            release.darwin.x86_64/librvvm_static.a
+    - name: Checkout
+      uses: actions/checkout@v4.1.1
+    - name: Download SDL2 headers
+      run: wget ${{env.SDL2_TAR_LINK}} -O - | tar -xzf - && mv ${{env.SDL2_NAME}}/include src/SDL2
+    - name: Build
+      run: make lib all
+    - name: Upload Artifacts
+      uses: actions/upload-artifact@v4.3.1
+      with:
+        retention-days: 5
+        name: rvvm_macos_x86_64
+        path: |
+          release.darwin.x86_64/rvvm_x86_64
+          release.darwin.x86_64/librvvm.dylib
+          release.darwin.x86_64/librvvm_static.a
