@@ -58,8 +58,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4.1.1
-      - name: Install SDL
-        run: brew install sdl12-compat
+      - name: Install SDL2
+        run: brew install sdl2
       - name: Build
         run: make lib all
       - name: Upload Artifacts
