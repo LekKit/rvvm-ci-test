@@ -39,6 +39,8 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4.1.1
+    - name: Update APT repository
+      run: sudo DEBIAN_FRONTEND=noninteractive apt-get update -yq
     - name: Set up MinGW
       run: sudo DEBIAN_FRONTEND=noninteractive apt-get install -yq --no-install-recommends gcc-mingw-w64-x86-64-win32
     - name: Build
