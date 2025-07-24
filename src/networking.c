@@ -9,6 +9,7 @@ file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 // Make POSIX/GNU/BSD features available in strict C standard mode
 // For kqueue(), kevent(), syscall(), etc
+
 #undef _GNU_SOURCE
 #define _GNU_SOURCE
 #undef _BSD_SOURCE
@@ -274,19 +275,19 @@ static void net_handle_set_cloexec(net_handle_t fd)
 
 // Set CLOEXEC flag on created sockets to prevent handle leaking
 // Optimize nonblocking connects on modern Linux and *BSD
-static net_handle_t net_socket_create_ex(int domain, int type, bool nonblock)
+static net_handle_t net_socket_create_ex(int domain, int type, int protocol, bool nonblock)
 {
     net_handle_t fd = NET_HANDLE_INVALID;
 #if defined(SOCK_CLOEXEC) && defined(SOCK_NONBLOCK)
     // Create a blocking/non-blocking CLOEXEC socket in a single syscall (Linux, FreeBSD, OpenBSD, NetBSD...)
-    fd = socket(domain, type | SOCK_CLOEXEC | (nonblock ? SOCK_NONBLOCK : 0), 0);
+    fd = socket(domain, type | SOCK_CLOEXEC | (nonblock ? SOCK_NONBLOCK : 0), protocol);
     if (fd != NET_HANDLE_INVALID) {
         return fd;
     }
 #endif
     if (fd == NET_HANDLE_INVALID) {
         // Fallback to separate syscalls for socket & CLOEXEC
-        fd = socket(domain, type, 0);
+        fd = socket(domain, type, protocol);
         if (fd != NET_HANDLE_INVALID) {
             net_handle_set_cloexec(fd);
         }
@@ -330,18 +331,24 @@ static net_handle_t net_accept_ex(net_handle_t listener, void* sock_addr, net_ad
     return fd;
 }
 
-static net_handle_t net_create_handle(int type, const net_addr_t* addr, bool nonblock)
+static net_handle_t net_create_handle(int type, int protocol, const net_addr_t* addr, bool nonblock)
 {
     net_handle_t fd = NET_HANDLE_INVALID;
     if (!net_init()) {
         // Network subsystem initialization failed
         return fd;
     }
+
     if (!addr || addr->type == NET_TYPE_IPV4) {
-        fd = net_socket_create_ex(AF_INET, type, nonblock);
+        fd = net_socket_create_ex(AF_INET, type, protocol, nonblock);
 #if defined(IPV6_NET_IMPL)
     } else if (addr->type == NET_TYPE_IPV6) {
-        fd = net_socket_create_ex(AF_INET6, type, nonblock);
+#if defined(IPPROTO_ICMP) && defined(IPPROTO_ICMPV6)
+        int proto = (protocol == IPPROTO_ICMP) ? IPPROTO_ICMPV6 : protocol;
+        fd = net_socket_create_ex(AF_INET6, type, proto, nonblock);
+#else
+        fd = net_socket_create_ex(AF_INET6, type, protocol, nonblock);
+#endif
 #endif
     }
 #if defined(IPPROTO_TCP) && defined(TCP_NODELAY)
@@ -828,7 +835,7 @@ size_t net_parse_addr(net_addr_t* addr, const char* str)
 
 net_sock_t* net_tcp_listen(const net_addr_t* addr)
 {
-    net_handle_t fd = net_create_handle(SOCK_STREAM, addr, false);
+    net_handle_t fd = net_create_handle(SOCK_STREAM, 0, addr, false);
     if (fd == NET_HANDLE_INVALID) {
         return NULL;
     }
@@ -880,7 +887,7 @@ net_sock_t* net_tcp_connect(const net_addr_t* dst, const net_addr_t* src, bool b
         return NULL;
     }
     // Create a nonblocking socket if needed
-    net_handle_t fd = net_create_handle(SOCK_STREAM, dst, !block);
+    net_handle_t fd = net_create_handle(SOCK_STREAM, 0, dst, !block);
     if (fd == NET_HANDLE_INVALID) {
         return NULL;
     }
@@ -989,7 +996,7 @@ int32_t net_tcp_recv(net_sock_t* sock, void* buffer, size_t size)
 
 net_sock_t* net_udp_bind(const net_addr_t* addr)
 {
-    net_handle_t fd = net_create_handle(SOCK_DGRAM, addr, false);
+    net_handle_t fd = net_create_handle(SOCK_DGRAM, 0, addr, false);
     if (fd == NET_HANDLE_INVALID) {
         return NULL;
     }
@@ -1048,6 +1055,50 @@ int32_t net_udp_recv(net_sock_t* sock, void* buffer, size_t size, net_addr_t* ad
     }
     return NET_ERR_RESET;
 }
+
+/*
+ * DGRAM ICMP sockets, AFAIK only supported on linux now
+ */
+net_sock_t* net_icmp_bind(net_addr_t* addr)
+{
+#ifdef IPPROTO_ICMP
+    net_handle_t fd = net_create_handle(SOCK_DGRAM, IPPROTO_ICMP, addr, false);
+    uint16_t id = addr->port;
+    addr->port = 0;
+    if (unlikely(fd == NET_HANDLE_INVALID)) {
+        goto eperm;
+    }
+    if (!net_bind_handle(fd, addr)) {
+        net_close_handle(fd);
+        goto eperm;
+    }
+    net_sock_t* sock = net_wrap_handle(fd);
+    if (!sock) {
+        net_close_handle(fd);
+        return NULL;
+    }
+    sock->addr.port = id;
+    return sock;
+eperm:
+#endif
+    UNUSED(addr);
+    return NULL;
+}
+
+size_t net_icmp_send(net_sock_t* sock, const void* buffer, size_t size, const net_addr_t* addr)
+{
+    return net_udp_send(sock, buffer, size, addr);
+}
+
+int32_t net_icmp_recv(net_sock_t* sock, void* buffer, size_t size, net_addr_t* addr)
+{
+    return net_udp_recv(sock, buffer, size, addr);
+}
+
+uint16_t net_icmp_id(net_sock_t* sock) {
+    return sock->addr.port;
+}
+
 
 /*
  * Generic socket operations
