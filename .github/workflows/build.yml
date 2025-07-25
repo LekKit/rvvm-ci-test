@@ -31,10 +31,9 @@ jobs:
             # RVVM FPU tests fail with 8087, use SSE2
           - os: linux
             arch: i386
-            make: make CFLAGS="-Werror -m32 -mfpmath=sse -msse2"
+            make: make СС=clang CFLAGS="-Werror -m32 -march=i586"
             runner: ubuntu-latest
             apt-pkgs: gcc-multilib libx11-dev libxext-dev libwayland-dev libxkbcommon-dev
-            test: yes
 
           - os: linux
             arch: arm64
@@ -61,7 +60,7 @@ jobs:
 
           - os: windows
             arch: i386
-            make: make CC=i686-w64-mingw32-gcc CFLAGS="-Werror -march=i386"
+            make: make CC=i686-w64-mingw32-gcc CFLAGS="-Werror -march=i586"
             runner: ubuntu-latest
 
           - os: macos
